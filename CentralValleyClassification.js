@@ -35,37 +35,94 @@ var clipped2015 = median2015.clip(centralValley);
 var polygons2010 = ee.FeatureCollection('ft:1_HZ7IEagQdZvXpnIlmIRk1W_jcqffc0NN3wDUFw3', 'geometry');
 var polygons2015 = ee.FeatureCollection('ft:1scXL_EoS1dsU2x87pgU2LWgFG9wpwI5WSibgGiwU', 'geometry');
 
-// Assign random numbers in preparation for a test/train split that will maintain class proportions.
-// var builtUp = polygons.filterMetadata('Class', 'equals', 0);
-// var water = polygons.filterMetadata('Class', 'equals', 1);
-// var bareSoil = polygons.filterMetadata('Class', 'equals', 2);
-// var vegetation = polygons.filterMetadata('Class', 'equals', 3);
-// var classes = [builtUp, water, bareSoil, vegetation];
-// for (var i = 0; i < classes.length; i++) {
-//   classes[i] = classes[i].randomColumn('random', 1001);
-// }
-// print(classes);
+// Test/train split that will maintain class proportions.
+// var s = [1, 0];
+// print(typeof(ee.List(s)));
+var trainingPercent = 0.75;
 polygons2010 = polygons2010.randomColumn('random', 2015);
 polygons2015 = polygons2015.randomColumn('random', 2015);
 
-// Join the Class & random values with all pixels in each polygon in the training datasets.
+var polygonSets = ee.List([polygons2010, polygons2015]);
+var classIDs = ee.List([0, 1, 2, 3]);
+
+function getSortedClassPolygonSet(polygonSet, classID, sortColumn)
+{
+	var classPolygonSet = polygonSet.filterMetadata('Class', 'equals', classID);
+	var sortedClassPolygonSet = classPolygonSet.sort(sortColumn);
+	return sortedClassPolygonSet;
+}
+
+function getTrainingOrTestingPolygonSetForClass(polygonSet, classID, trainOrTest)
+{
+	var sortedClassPolygonSet = getSortedClassPolygonSet(polygonSet, classID, 'random');
+	var totalCount = ee.Number(sortedClassPolygonSet.size()).toInt();
+	var trainingCount = totalCount.multiply(trainingPercent).floor();
+	var start;
+	var end;
+	if (trainOrTest == 'train')
+	{
+		start = 0;
+		end = trainingCount;
+	}
+	else if (trainOrTest == 'test')
+	{
+		start = trainingCount;
+		end = totalCount;
+	}
+	else
+	{
+		start = 0;
+		end = totalCount;
+	}
+	return ee.FeatureCollection(sortedClassPolygonSet.toList(totalCount).slice(start, end));
+}
+
+function getTrainingOrTestingPolygonSet(polygonSet, trainOrTest)
+{
+	var class0 = getTrainingOrTestingPolygonSetForClass(polygons2010, 0, trainOrTest);
+	var class1 = getTrainingOrTestingPolygonSetForClass(polygons2010, 1, trainOrTest);
+	var class2 = getTrainingOrTestingPolygonSetForClass(polygons2010, 2, trainOrTest);
+	var class3 = getTrainingOrTestingPolygonSetForClass(polygons2010, 3, trainOrTest);
+	return class0.merge(class1).merge(class2).merge(class3);
+}
+
+function addTrainDescription(feature)
+{
+	return feature.set({description: 'training'});
+}
+
+function addTestDescription(feature)
+{
+	return feature.set({description: 'testing'});
+}
+
+var trainingPolygons2010 = getTrainingOrTestingPolygonSet(polygons2010, 'train').map(addTrainDescription);
+var testingPolygons2010 = getTrainingOrTestingPolygonSet(polygons2010, 'test').map(addTestDescription);
+var trainingPolygons2015 = getTrainingOrTestingPolygonSet(polygons2015, 'train').map(addTrainDescription);
+var testingPolygons2015 = getTrainingOrTestingPolygonSet(polygons2015, 'test').map(addTestDescription);
+
+polygons2010 = trainingPolygons2010.merge(testingPolygons2010);
+polygons2015 = trainingPolygons2015.merge(testingPolygons2015);
+
+// Join the Class & random values with all pixels in each polygon.
 // (Landsat 5 & 8 spatial res: 30 m)
+// 2010
 var regionsOfInterest2010 = clipped2010.sampleRegions({
 	collection: polygons2010,
-	properties: ['Class', 'random'],
+	properties: ['Class', 'description'],
 	scale: 30
 });
 var regionsOfInterest2015 = clipped2015.sampleRegions({
 	collection: polygons2015,
-	properties: ['Class', 'random'],
+	properties: ['Class', 'description'],
 	scale: 30
 });
 
 // Split into training and testing ROIs.
-var training2010 = regionsOfInterest2010.filterMetadata('random', 'less_than', 0.7);
-var testing2010 = regionsOfInterest2010.filterMetadata('random', 'not_less_than', 0.7);
-var training2015 = regionsOfInterest2015.filterMetadata('random', 'less_than', 0.7);
-var testing2015 = regionsOfInterest2015.filterMetadata('random', 'not_less_than', 0.7);
+var trainingRegionsOfInterest2010 = regionsOfInterest2010.filterMetadata('description', 'equals', 'training');
+var testingRegionsOfInterest2010 = regionsOfInterest2010.filterMetadata('description', 'equals', 'testing');
+var trainingRegionsOfInterest2015 = regionsOfInterest2015.filterMetadata('description', 'equals', 'training');
+var testingRegionsOfInterest2015 = regionsOfInterest2015.filterMetadata('description', 'equals', 'testing');
 
 /////////////////
 // Classification
@@ -81,21 +138,21 @@ var classifier2015 = ee.Classifier.randomForest({
 });
 
 // Test the classifiers' accuracy. (data, y, X)
-var trainingClassifier2010 = classifier2010.train(training2010, 'Class', bands2010);
-var validation2010 = testing2010.classify(trainingClassifier2010);
-var errorMatrix2010 = validation2010.errorMatrix('Class', 'classification');
-print('2010 Error Matrix:', errorMatrix2010);
-print('2010 Total accuracy:', errorMatrix2010.accuracy());
-print('2010 Consumer\'s accuracy (rows):', errorMatrix2010.consumersAccuracy());
-print('2010 Producer\'s accuracy (columns):', errorMatrix2010.producersAccuracy());
+// var trainingClassifier2010 = classifier2010.train(trainingRegionsOfInterest2010, 'Class', bands2010);
+// var validation2010 = testingRegionsOfInterest2010.classify(trainingClassifier2010);
+// var errorMatrix2010 = validation2010.errorMatrix('Class', 'classification');
+// print('2010 Error Matrix:', errorMatrix2010);
+// print('2010 Total accuracy:', errorMatrix2010.accuracy());
+// print('2010 Consumer\'s accuracy (rows):', errorMatrix2010.consumersAccuracy());
+// print('2010 Producer\'s accuracy (columns):', errorMatrix2010.producersAccuracy());
 
-var trainingClassifier2015 = classifier2015.train(training2015, 'Class', bands2015);
-var validation2015 = testing2015.classify(trainingClassifier2015);
-var errorMatrix2015 = validation2015.errorMatrix('Class', 'classification');
-print('2015 Error Matrix:', errorMatrix2015);
-print('2015 Total accuracy:', errorMatrix2015.accuracy());
-print('2015 Consumer\'s accuracy (rows):', errorMatrix2015.consumersAccuracy());
-print('2015 Producer\'s accuracy (columns):', errorMatrix2015.producersAccuracy());
+// var trainingClassifier2015 = classifier2015.train(trainingRegionsOfInterest2015, 'Class', bands2015);
+// var validation2015 = testingRegionsOfInterest2015.classify(trainingClassifier2015);
+// var errorMatrix2015 = validation2015.errorMatrix('Class', 'classification');
+// print('2015 Error Matrix:', errorMatrix2015);
+// print('2015 Total accuracy:', errorMatrix2015.accuracy());
+// print('2015 Consumer\'s accuracy (rows):', errorMatrix2015.consumersAccuracy());
+// print('2015 Producer\'s accuracy (columns):', errorMatrix2015.producersAccuracy());
 
 // Retrain the classifiers using the full dataset.
 var fullClassifier2010 = classifier2010.train(regionsOfInterest2010, 'Class', bands2010);
@@ -135,4 +192,5 @@ print('Total fallowed area, sq km:', totalFallowedArea);
 // Map.addLayer(classified2015, {min: 0, max: 3, palette: palette});
 Map.addLayer(fallowedArea);
 Map.setCenter(-120.959, 37.571, 7);
+
 
