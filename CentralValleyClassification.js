@@ -1,10 +1,8 @@
-/**
- * Created by BonnieRose on 11/23/15.
- */
-
 ///////////////
 // Prepare data
 ///////////////
+
+var seed = 2015;
 
 // Use these bands for prediction.
 var bands2010 = ['B1', 'B2', 'B3', 'B4', 'B5', 'B7'];
@@ -45,8 +43,8 @@ var polygons2015 = ee.FeatureCollection('ft:1scXL_EoS1dsU2x87pgU2LWgFG9wpwI5WSib
 //   classes[i] = classes[i].randomColumn('random', 1001);
 // }
 // print(classes);
-polygons2010 = polygons2010.randomColumn('random', 2015);
-polygons2015 = polygons2015.randomColumn('random', 2015);
+polygons2010 = polygons2010.randomColumn('random', seed);
+polygons2015 = polygons2015.randomColumn('random', seed);
 
 // Join the Class & random values with all pixels in each polygon in the training datasets.
 // (Landsat 5 & 8 spatial res: 30 m)
@@ -135,5 +133,4 @@ print('Total fallowed area, sq km:', totalFallowedArea);
 // Map.addLayer(classified2015, {min: 0, max: 3, palette: palette});
 Map.addLayer(fallowedArea);
 Map.setCenter(-120.959, 37.571, 7);
-
 
