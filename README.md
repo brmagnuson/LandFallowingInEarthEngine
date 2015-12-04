@@ -2,6 +2,7 @@
 
 The scripts in this repo show how I used Google Earth Engine to estimate the total area of land fallowed in California's Central Valley in 2015 relative to 2010 as an attempt to see what impact the ongoing drought has had on agriculture. The following shows how I approached the project and could be used as a tutorial for someone interested in using Google Earth Engine for a similar project.
 
+
 ## Table of Contents
 
 - [Introduction](#intro)
@@ -11,6 +12,7 @@ The scripts in this repo show how I used Google Earth Engine to estimate the tot
 - [Approach 2: NDVI Difference](#ndvi)
 - [Results](#results)
 - [Sources](#bib)
+
 
 <a name="intro"></a>
 ## Introduction
@@ -38,19 +40,27 @@ Google Earth Engine has two fundamental geographic data structures types that yo
  
  1. [**Images**](https://developers.google.com/earth-engine/image_overview): This is how Google Earth Engine represents raster data types. They are composed of bands (each with its own name, data type, pixel resolution, and projection) and a dictionary of properties storing image metadata. Multiple images (covering multiple areas and/or the same area over time) can be grouped together into an ImageCollection.
  2. [**Features**](https://developers.google.com/earth-engine/features): This is how Earth Engine represents vector data types. They are composed of a geometry and a dictionary of other properties of interest. Features can be grouped into a FeatureCollection.
+ 
+Since Earth Engine is still in beta, there are not billions of [stackoverflow.com](http://stackoverflow.com/) questions and answers to help solve problems once you start trying to use it. Instead, there is a Google group called Google Earth Engine Developers which is full of discussion of how to do different processes. As a beta tester, I had access to this group and found it to be a very valuable resource when I had a question not covered in the basic documentation.
+
 
 <a name="data"></a>
 ## Setting Up Data
 
+
+<a name="central-valley"></a>
 ###### California's Central Valley
 
 To figure out what land had been fallowed in the Central Valley in 2015 relative to 2010, the first thing I needed was to know what exactly counted as California's Central Valley. There are various sources one could use to delineate the border of the Central Valley, each likely with slightly different definitions of where that border was that would give you slightly different answers of how much land has been fallowed. I chose to use the region that the [California Gap Analysis Project](http://www.biogeog.ucsb.edu/projects/gap/gap_data_reg.html) at UC Santa Barbara defined as the Great Central Valley. I downloaded the Central Valley land cover coverage, which consists of planar-enforced polygons specifying land cover and land use across the region as of 1998, and then I used ArcMap to dissolve all the polygons into one giant polygon, the outline of which would give me the border of the Central Valley, and saved this as a KML file (using WGS 84 as the datum).
 
-KML files can be imported into a Google Fusion Table, which can then be imported into Earth Engine as a FeatureCollection using the Fusion Table's id (specific instructions [here](https://developers.google.com/earth-engine/importing)) like so in my script:
+KML files can be imported into a Google Fusion Table, which can then be imported into Earth Engine as a FeatureCollection using the Fusion Table's id like so in my script:
 
 ```javascript
 var centralValley = ee.FeatureCollection('ft:1h46ENpEp8vO3pOe1EqeF1sZLEDhSVMxbu8pHAoU4', 'geometry');
 ```
+
+(Specific instructions on the import process [here](https://developers.google.com/earth-engine/importing).)
+
 
 ###### Landsat Imagery
 
@@ -58,7 +68,7 @@ Next I needed satellite imagery of the area. Google Earth Engine has both raw an
 
 ![Merced, 2010](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/L7%20white%20stripes.png "Merced, CA, 2010")
 
-Approximately 22% of any given Landsat 7 image is lost because of the SLC failure, and since I'm interested in calculating area of specific pixels, I wanted to use complete imagery (USGS 2015). So instead, I used Landsat 5 data (available from January 1, 1984, to May 5, 2012) for 2010 and Landsat 8 data (available from April 11, 2013, to the present day) for 2015. Since these are different satellites that collect slightly different bands, I would have to treat each of them separately when I did my analysis. Surface reflectance as calculated by the LEDAPS algorithm isn't readily available in Earth Engine for Landsat 8 data, so instead I used the USGS orthorectified, top-of-atmosphere reflectance ImageCollections for Landsat 5 and 8. These images have been converted from the raw data of thermal bands to brightness temperature (reflectance) for each band.
+Approximately 22% of any given Landsat 7 image is lost because of the SLC failure, and since I'm interested in calculating area of specific pixels, I wanted to use complete imagery (USGS 2015). So instead, I used Landsat 5 data (available from January 1, 1984, to May 5, 2012) for 2010 and Landsat 8 data (available from April 11, 2013, to the present day) for 2015. Since these are different satellites that collect slightly different bands of the electromagnetic spectrum, I would have to treat each of them separately when I did my analysis. Surface reflectance as calculated by the LEDAPS algorithm isn't readily available in Earth Engine for Landsat 8 data, so instead I used the USGS orthorectified, top-of-atmosphere reflectance ImageCollections for Landsat 5 and Landsat 8. These images have been converted from the raw data of thermal bands to brightness temperature (reflectance) for each band.
 
 I loaded my imagery using the following code, selecting the June-August date range to get images for the summers of 2010 and 2015:
  
@@ -78,9 +88,9 @@ var summer2015 = ee.ImageCollection('LANDSAT/LC8_L1T_TOA')
   .select(bands2015);
 ```
 
-Landsat 5 and Landsat 8 number their [bands](http://landsat.usgs.gov/band_designations_landsat_satellites.php) differently and have different bands available, so I have to select their bands appropriately. For Landsat 5, the visible spectrum is Bands 1 through 3, near-infrared is Bands 4 and 5, and mid-infrared is Band 7. For Landsat 8, the visible spectrum is Bands 2 through 4, near-infrared is Band 5, short-wave infrared is Bands 6 and 7, and thermal infrared is bands 10 and 11. I only select these bands rather than the full range, because these are the bands I want to use in my analysis.
+Landsat 5 and Landsat 8 number their [bands](http://landsat.usgs.gov/band_designations_landsat_satellites.php) differently and have different bands available, so I have to select their bands appropriately. For Landsat 5, the visible spectrum is Bands 1 through 3, near-infrared is Bands 4 and 5, and mid-infrared is Band 7. For Landsat 8, the visible spectrum is Bands 2 through 4, near-infrared is Band 5, short-wave infrared is Bands 6 and 7, and thermal infrared is Bands 10 and 11. I only select these bands rather than the full range of available bands, because these are the bands I want to use in my analysis.
 
-Any one satellite image may have various problems that can obscure the surface--a cloudy day, a plume of smoke--so creating a composite image can help give a better picture. By default, Earth Engine creates the composite using the most recent pixel in each case, but telling Earth Engine to choose the median value in the stack of possible pixel values can usually remove clouds, as long as you have enough images in the collection. Clouds have a high reflectance value, and shadows have a low reflectance value, so picking the median should give you a relatively cloudless composite image. I create my median-pixel composite like so:
+Any one satellite image may have various problems that can obscure the surface--a cloudy day, a plume of smoke--so creating a composite image can help give a better picture. By [default](https://developers.google.com/earth-engine/tutorial_api_04), Earth Engine creates the composite using the most recent pixel in each case, but telling Earth Engine to choose the median value in the stack of possible pixel values can usually remove clouds, as long as you have enough images in the collection. Clouds have a high reflectance value, and shadows have a low reflectance value, so picking the median should give you a relatively cloudless composite image. I create my median-pixel composite like so:
 
 ```javascript
 var median2010 = summer2010.median();
@@ -111,14 +121,62 @@ Map.addLayer(clipped2015, vizParams2015);
 Map.setCenter(-120.959, 37.571, 7);
 ```
 
-I've put the results of these two pieces of code together for easy comparison. Voilà, California's Central Valley! Clearly, 2015 is not looking quite as lush.
+I've put the results of these two pieces of code together for easy comparison. Voilà, California's Central Valley! 2015 is not looking quite as lush.
 
 ![2010 vs 2015](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/ClippedComparison.png "2010 vs 2015")
+
 
 <a name="classification"></a>
 ## Approach 1: Classification
 
+One approach to estimating the total area of fallowed land is to perform a basic land cover classification for 2010 and 2015 based on training data and considering land that has converted from vegetation to bare soil to be fallowed. This section explains how to do this in Google Earth Engine.
+
+
 ###### Regions of Interest
+
+The process of classification involves two pieces: a classification algorithm and data that you can use to train it. For land cover classification, our data is usually satellite imagery. Satellites record reflectance across multiple regions of the electromagnetic spectrum, and different types of land cover have different spectral signatures. For example, the below image shows the spectral signature curves for each of four pixels from a Landsat 8 image of the Sacramento Valley. I chose those pixels to be representative of four different types: urban areas, water, vegetation, and bare soil. You can see how they differ, particularly beyond the visible region of the electro magnetic spectrum:
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/SpectralSignatures.png "Spectral Signatures")
+
+The classification algorithm can learn what each of these four categories tend to look like across the different spectral regions our bands cover based on training pixels. Then it can be shown new pixels that we haven't already classified and tell us which category the unknown pixels most likely belong in, according to what it's already seen.
+
+Now that I had images of the Central Valley, I needed to create training data that would teach my classification algorithm what urban areas, water, vegetation, and bare soil looked like. Training data in remote sensing land cover classification problems is usually referred to as "regions of interest." Handily, Earth Engine makes it fairly easy to draw feature collections using the polygon drawing tool in the upper left of the map in the Playground.
+ 
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/GeometryDrawing.png "Geometry Drawing")
+
+In a separate script, I displayed my map in a false-color composite using the near-infrared, red, and green bands. This makes vegetated areas display as bright red, which can make the differences between vegetated areas and bare soil stand out more easily than using a natural-color composite.
+
+```javascript
+var vizParams = {bands: ['B4', 'B3', 'B2'], min: 0, max: 3500};
+Map.addLayer(clipped2010, vizParams);
+```
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/2010FalseColor.png "2010 False color composite")
+
+I drew one FeatureCollection for each class, giving it both a numeric class (since that's what Earth Engine will need later on during the classification process) and a descriptive label for my own reference. (This was time-consuming.) For example:
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/ConfigureGeomImport.png "Configuring Import")
+
+Earth Engine imports any geometries, Features, or FeatureCollections you draw at the top of your script, so they are there to work with and they show up on your map. Below is a picture of my 2010 map with my 2010 regions of interest displayed on top. I tried to distribute them around the entire valley, since a given land cover class might differ more in different geographic areas and to give my classifier varied training data to make it more robust.
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/2010ROIs.png "2010 Regions of Interest")
+
+With my FeatureCollections for each class drawn, I merged them into a single FeatureCollection of all my regions of interest. I exported this FeatureCollection to Google Drive as a KML file, which (as you'll remember from [above](#central-valley) can be imported into a Google Fusion Table and then into Earth Engine. That way I could run the region of interest creation process as one script and import it into my classification script at a later time, rather than doing everything at once in one very long script. (One hiccup in this process was that the fusion table I created had a column named "system:index", which caused a problem when I tried to import it into a new script, because apparently Earth Engine wants to assign the system:index property itself each time you import something. My workaround was to rename the column to "oldID" to prevent the error.)
+
+```javascript
+var regionsOfInterest = builtUp.merge(water).merge(bareSoil).merge(vegetation);
+Export.table(regionsOfInterest, 'exportRegionsOfInterest', {
+  driveFileNamePrefix: 'regionsOfInterest2010',
+  fileFormat: 'KML'});
+```
+
+I repeated this process for 2015. Since I used Landsat 8 rather than Landsat 5 for 2015, I needed to train a classifier that worked for Landsat 8 specifically, so I also needed another set of training regions of interest. After that long process, I had all my training data and could import it into my classification script.
+
+// Import training data.
+// 0: BuiltUp, 1: Water, 2: BareSoil, 3: Vegetation
+var polygons2010 = ee.FeatureCollection('ft:1_HZ7IEagQdZvXpnIlmIRk1W_jcqffc0NN3wDUFw3', 'geometry');
+var polygons2015 = ee.FeatureCollection('ft:1scXL_EoS1dsU2x87pgU2LWgFG9wpwI5WSibgGiwU', 'geometry');
+
 
 ###### Training a Classifier
 
