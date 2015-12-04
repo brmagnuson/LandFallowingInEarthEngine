@@ -128,7 +128,7 @@ var totalFallowedArea = fallowedArea.reduceRegion({reducer: ee.Reducer.sum(),
 print('Total fallowed area, sq km:', totalFallowedArea);
 
 // Display.
-// Map.addLayer(clipped2015, vizParams);
+// Map.addLayer(clipped2015, vizParams2015);
 // Map.addLayer(classified2010, {min: 0, max: 3, palette: palette});
 // Map.addLayer(classified2015, {min: 0, max: 3, palette: palette});
 Map.addLayer(fallowedArea);
