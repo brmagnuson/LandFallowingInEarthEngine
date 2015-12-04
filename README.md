@@ -48,7 +48,9 @@ To figure out what land had been fallowed in the Central Valley in 2015 relative
 
 KML files can be imported into a Google Fusion Table, which can then be imported into Earth Engine as a FeatureCollection using the Fusion Table's id (specific instructions [here](https://developers.google.com/earth-engine/importing)) like so in my script:
 
-`var centralValley = ee.FeatureCollection('ft:1h46ENpEp8vO3pOe1EqeF1sZLEDhSVMxbu8pHAoU4', 'geometry');`
+```javascript
+var centralValley = ee.FeatureCollection('ft:1h46ENpEp8vO3pOe1EqeF1sZLEDhSVMxbu8pHAoU4', 'geometry');
+```
 
 ###### Landsat Imagery
 
@@ -60,13 +62,13 @@ Approximately 22% of any given Landsat 7 image is lost because of the SLC failur
 
 I loaded my imagery using the following code, selecting the June-August date range to get images for the summers of 2010 and 2015:
  
-```
+```javascript
 // Use these bands for analysis.
 var bands2010 = ['B1', 'B2', 'B3', 'B4', 'B5', 'B7'];
 var bands2015 = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B10', 'B11'];
 ```
  
-```
+```javascript
 // Create median-pixel composites for the summers of 2010 and 2015 from Landsat 5 & 8.
 var summer2010 = ee.ImageCollection('LANDSAT/LT5_L1T_TOA')
   .filterDate('2010-06-01', '2010-08-30')
@@ -80,7 +82,7 @@ Landsat 5 and Landsat 8 number their [bands](http://landsat.usgs.gov/band_design
 
 Any one satellite image may have various problems that can obscure the surface--a cloudy day, a plume of smoke--so creating a composite image can help give a better picture. By default, Earth Engine creates the composite using the most recent pixel in each case, but telling Earth Engine to choose the median value in the stack of possible pixel values can usually remove clouds, as long as you have enough images in the collection. Clouds have a high reflectance value, and shadows have a low reflectance value, so picking the median should give you a relatively cloudless composite image. I create my median-pixel composite like so:
 
-```
+```javascript
 var median2010 = summer2010.median();
 var median2015 = summer2015.median();
 ```
@@ -89,7 +91,7 @@ var median2015 = summer2015.median();
 
 Now that I have my two pieces of data--the Central Valley and Landsat imagery--I can clip the median-pixel Landsat images by the Central Valley and work with just my area of interest:
 
-```
+```javascript
 // Clip Landsat composite by California state boundary.
 var clipped2010 = median2010.clip(centralValley);
 var clipped2015 = median2015.clip(centralValley);
@@ -97,19 +99,19 @@ var clipped2015 = median2015.clip(centralValley);
 
 I can then display my images to take a look at what we're working with.
 
-```
+```javascript
 var vizParams2010 = {bands: ['B3', 'B2', 'B1'], min: 0, max: 0.3};
 Map.addLayer(clipped2010, vizParams2010);
 Map.setCenter(-120.959, 37.571, 7);
 ```
 
-```
+```javascript
 var vizParams2015 = {bands: ['B4', 'B3', 'B2'], min: 0, max: 0.3};
 Map.addLayer(clipped2015, vizParams2015);
 Map.setCenter(-120.959, 37.571, 7);
 ```
 
-I've put the results of these two pieces of code together for easy comparison. Voilà, California's Central Valley!
+I've put the results of these two pieces of code together for easy comparison. Voilà, California's Central Valley! Clearly, 2015 is not looking quite as lush.
 
 ![2010 vs 2015](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/ClippedComparison.png "2010 vs 2015")
 
