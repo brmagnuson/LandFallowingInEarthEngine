@@ -1,6 +1,6 @@
 # Calculating Fallowed Land in Google Earth Engine
 
-The scripts in this repo show how I used Google Earth Engine to estimate the total area of land fallowed in California's Central Valley in 2015 relative to 2010 as an attempt to see what impact the ongoing drought has had on agriculture. The following shows how I approached the project and could be used as a tutorial for someone interested in using Google Earth Engine for a similar project.
+The scripts in this repo show how I used Google Earth Engine to estimate the total area of land fallowed in California's Central Valley in 2015 relative to 2010 as an attempt to see what impact the ongoing drought has had on agriculture. The following shows how I approached the project and could be used as a detailed tutorial for someone interested in using Google Earth Engine for a similar project.
 
 
 ## Table of Contents
@@ -134,13 +134,13 @@ One approach to estimating the total area of fallowed land is to perform a basic
 
 ###### Regions of Interest
 
-The process of classification involves two pieces: a classification algorithm and data that you can use to train it. For land cover classification, our data is usually satellite imagery. Satellites record reflectance across multiple regions of the electromagnetic spectrum, and different types of land cover have different spectral signatures. For example, the below image shows the spectral signature curves for each of four pixels from a Landsat 8 image of the Sacramento Valley. I chose those pixels to be representative of four different types: urban areas, water, vegetation, and bare soil. You can see how they differ, particularly beyond the visible region of the electro magnetic spectrum:
+The process of classification involves two pieces: a classification algorithm and data that you can use to train it. For land cover classification, our data is usually satellite imagery. Satellites record reflectance across multiple regions of the electromagnetic spectrum, and different types of land cover have different spectral signatures. For example, the below image shows the spectral signature curves for each of four pixels from a Landsat 8 image of the Sacramento Valley. I chose those pixels to be representative of four different types: urban areas, water, vegetation, and bare soil. You can see how they differ, particularly beyond the visible region of the electromagnetic spectrum:
 
 ![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/SpectralSignatures.png "Spectral Signatures")
 
 The classification algorithm can learn what each of these four categories tend to look like across the different spectral regions our bands cover based on training pixels. Then it can be shown new pixels that we haven't already classified and tell us which category the unknown pixels most likely belong in, according to what it's already seen.
 
-Now that I had images of the Central Valley, I needed to create training data that would teach my classification algorithm what urban areas, water, vegetation, and bare soil looked like. Training data in remote sensing land cover classification problems is usually referred to as "regions of interest." Handily, Earth Engine makes it fairly easy to draw feature collections using the polygon drawing tool in the upper left of the map in the Playground.
+Now that I had images of the Central Valley, I needed to create training data that would teach my classification algorithm what urban areas, water, vegetation, and bare soil looked like. Training data in remote sensing land cover classification problems is usually referred to as "regions of interest." Handily, Earth Engine makes it fairly easy to draw FeatureCollections using the polygon drawing tool in the upper left of the map in the Playground.
  
 ![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/GeometryDrawing.png "Geometry Drawing")
 
@@ -153,11 +153,11 @@ Map.addLayer(clipped2010, vizParams);
 
 ![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/2010FalseColor.png "2010 False color composite")
 
-I drew one FeatureCollection for each class, giving it both a numeric class (since that's what Earth Engine will need later on during the classification process) and a descriptive label for my own reference. (This was time-consuming.) For example:
+I drew one FeatureCollection for each class, giving it both a numeric class (since that's what Earth Engine will need later on during the classification process) and a descriptive label for my own reference. For example:
 
 ![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/ConfigureGeomImport.png "Configuring Import")
 
-Earth Engine imports any geometries, Features, or FeatureCollections you draw at the top of your script, so they are there to work with and they show up on your map. Below is a picture of my 2010 map with my 2010 regions of interest displayed on top. I tried to distribute them around the entire valley, since a given land cover class might differ more in different geographic areas and to give my classifier varied training data to make it more robust.
+Earth Engine imports any geometries, Features, or FeatureCollections you draw at the top of your script, so they are there to work with and they show up on your map. Below is a picture of my 2010 map with my 2010 regions of interest displayed on top. I drew 30 polygons for each land cover class, meaning 120 polygons in total. (This was time-consuming.) I tried to distribute them around the entire valley, since a given land cover class might differ more in different geographic areas and to give my classifier varied training data to make it more robust.
 
 ![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/2010ROIs.png "2010 Regions of Interest")
 
@@ -165,22 +165,171 @@ With my FeatureCollections for each class drawn, I merged them into a single Fea
 
 ```javascript
 var regionsOfInterest = builtUp.merge(water).merge(bareSoil).merge(vegetation);
-Export.table(regionsOfInterest, 'exportRegionsOfInterest', {
-  driveFileNamePrefix: 'regionsOfInterest2010',
-  fileFormat: 'KML'});
+Export.table(regionsOfInterest, 'exportRegionsOfInterest', {driveFileNamePrefix: 'regionsOfInterest2010',
+                                                            fileFormat: 'KML'});
 ```
 
 I repeated this process for 2015. Since I used Landsat 8 rather than Landsat 5 for 2015, I needed to train a classifier that worked for Landsat 8 specifically, so I also needed another set of training regions of interest. After that long process, I had all my training data and could import it into my classification script.
 
+```javascript
 // Import training data.
 // 0: BuiltUp, 1: Water, 2: BareSoil, 3: Vegetation
 var polygons2010 = ee.FeatureCollection('ft:1_HZ7IEagQdZvXpnIlmIRk1W_jcqffc0NN3wDUFw3', 'geometry');
 var polygons2015 = ee.FeatureCollection('ft:1scXL_EoS1dsU2x87pgU2LWgFG9wpwI5WSibgGiwU', 'geometry');
+```
 
 
 ###### Training a Classifier
 
-###### Prediction
+Earth Engine has support for a number of different classification algorithms, including random forests, naive Bayes, and support vector machines. I chose to use the random forest algorithm to classify my pixels; it doesn't make assumptions about the distribution of data and it often performs very well compared to many other classifiers. (If you're interested in the details of how a random forest classification works, [Liaw and Wiener 2002](http://www.bios.unc.edu/~dzeng/BIOS740/randomforest.pdf) gives a nice overview.) I created a classifier for each year because of their different satellite imagery:
+
+```javascript
+var classifier2010 = ee.Classifier.randomForest({
+	numberOfTrees: 10,
+});
+var classifier2015 = ee.Classifier.randomForest({
+	numberOfTrees: 10,
+});
+```
+
+To train my classifiers, I would feed in each year's regions of interest. This process really had three steps: joining the regions of interest with the band data from Landsat imagery for each pixel, doing a test/train split to assess my classifiers' accuracies, and then training the classifier on the full data set.
+
+Step 1: Join the regions of interest with the band data from Landsat imagery for each pixel.
+
+```javascript
+// Assign random numbers in preparation for a test/train split that will maintain class proportions.
+var seed = 2015;
+polygons2010 = polygons2010.randomColumn('random', seed);
+polygons2015 = polygons2015.randomColumn('random', seed);
+```
+
+```javascript
+// Join the Class & random values with all pixels in each polygon in the training datasets.
+// (Landsat 5 & 8 spatial res: 30 m)
+var regionsOfInterest2010 = clipped2010.sampleRegions({
+	collection: polygons2010,
+	properties: ['Class', 'random'],
+	scale: 30
+});
+var regionsOfInterest2015 = clipped2015.sampleRegions({
+	collection: polygons2015,
+	properties: ['Class', 'random'],
+	scale: 30
+});
+```
+
+Step 2: Do a 30/70 test/train split using the random numbers I generated in Step 1 and assess each classifier's accuracy.
+
+```javascript
+// Split into training and testing ROIs.
+var training2010 = regionsOfInterest2010.filterMetadata('random', 'less_than', 0.7);
+var testing2010 = regionsOfInterest2010.filterMetadata('random', 'not_less_than', 0.7);
+var training2015 = regionsOfInterest2015.filterMetadata('random', 'less_than', 0.7);
+var testing2015 = regionsOfInterest2015.filterMetadata('random', 'not_less_than', 0.7);
+```
+
+```javascript
+// Test the classifiers' accuracy. (data, y, X)
+var trainingClassifier2010 = classifier2010.train(training2010, 'Class', bands2010);
+var validation2010 = testing2010.classify(trainingClassifier2010);
+var errorMatrix2010 = validation2010.errorMatrix('Class', 'classification');
+```
+```javascript
+var trainingClassifier2015 = classifier2015.train(training2015, 'Class', bands2015);
+var validation2015 = testing2015.classify(trainingClassifier2015);
+var errorMatrix2015 = validation2015.errorMatrix('Class', 'classification');
+```
+
+The classifiers seemed to perform well, with a 97.8% total accuracy for 2010 and a XXXX% total accuracy for 2015. I made confusion matrices for each year:
+
+Here's 2010:
+
+ 2010                     | Urban    | Water   | Bare Soil | Vegetation | *Consumer's Accuracy*
+---                       | ---:     | ---:    | ---:      | ---:       | ---:
+**Urban**                 | 2007     | 170     | 126       | 72         | *85.5%*   
+**Water**                 | 0        | 6015    | 0         | 0          | *100.0%*
+**Bare Soil**             | 38       | 0       | 7895      | 0          | *99.5%* 
+**Vegetation**            | 1        | 0       | 0         | 2576       | *99.96%* 
+_**Producer's Accuracy**_ | *98.1%*  | *97.3%* | *98.4%*   | *97.3%*    | _**97.8%**_
+
+
+And here's 2015:
+
+ 2015                     | Urban    | Water    | Bare Soil | Vegetation | *Consumer's Accuracy*
+---                       | ---:     | ---:     | ---:      | ---:       | ---:
+**Urban**                 | 1372     | 0        | 1622      | 27         | *45.4*   
+**Water**                 | 0        | 6541     | 0         | 0          | *100.0%*
+**Bare Soil**             | 34       | 0        | 43766     | 0          | *99.9%* 
+**Vegetation**            | 0        | 0        | 69        | 4549       | *98.5%* 
+_**Producer's Accuracy**_ | *97.6%*  | *100.0%* | *96.3%*   | *99.4%*    | _**97.0%**_
+
+Clearly 2015 is classifying built-up, urban areas as bare soil far too often, and this could make the classification's estimation of fallowed land too high, since land classified as vegetated in 2010 and bare soil in 2015 will be treated as fallowed. However, since the 2010 classifier has a very high accuracy rate for vegetation, I suspect that most of the 2015 pixels misclassified as urban won't get picked up when I test for the vegetation-to-bare-soil conversion. Given this, I decided it was not worth the effort to draw better training regions of interest and moved on to Step 3.
+
+Step 3: Train the classifier on the full data set.
+
+```javascript
+// Retrain the classifiers using the full dataset.
+var fullClassifier2010 = classifier2010.train(regionsOfInterest2010, 'Class', bands2010);
+var fullClassifier2015 = classifier2015.train(regionsOfInterest2015, 'Class', bands2015);
+```
+```javascript
+// Classify the images.
+var classified2010 = clipped2010.classify(fullClassifier2010);
+var classified2015 = clipped2015.classify(fullClassifier2015);
+```
+
+Now I could take a look and see what my classifiers had predicted for each year.
+
+```javascript
+// Create a palette to display the classes.
+var palette =['c9c0bf', '435ebf', 'EEE8AA', '006400'];
+Map.addLayer(classified2010, {min: 0, max: 3, palette: palette});
+Map.addLayer(classified2015, {min: 0, max: 3, palette: palette});
+Map.setCenter(-120.959, 37.571, 7);
+```
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/ClassificationComparison.png "2010 vs 2015 Classification")
+
+Suspiciously, 2015 actually looks like it has *more* vegetation than 2010, even though I had fairly low rates of errors of commission and ommission for vegetation for both years! Given more time, this would be very worth looking into. Most likely, fixing the problem would involve better training data than something I drew by hand one afternoon. But for purposes of exploring this topic, I decided this was something to note and moved on.
+
+
+###### Finding Fallowed Land
+
+As mentioned previously, I considered land that had been classified as vegetation in 2010 and as bare soil in 2015 to be fallowed land. The below code gave each pixel a 1 if it met this fallowing condition and 0 otherwise. Fallowed land shows up as white pixels in the below image, while everything else shows up as black pixels.
+
+```javascript
+// I define fallowed land as land converted from vegetation (3) to bare soil (2).
+var fallowedBinary = classified2010.eq(3).and(classified2015.eq(2));
+Map.addLayer(fallowedBinary);
+```
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/ClassificationBinary.png "Classification Binary")
+
+
+###### Calculating Area
+
+I created a new Image where the value of each pixel was its area in square meters using the ee.Image.pixelArea() function. I converted this to square kilometers so the numbers would be more understandable, producing `areaImageSqKm` as a new Image. Earth Engine allows you to multiply Images, in which case pixel 1 in Image A is multiplied by pixel 1 in Image B to produce the value of pixel 1 in Image C, and so on. Since the value of each non-fallowed pixel in my `fallowedBinary` Image was 0, multiplying `fallowedBinary` by `areaImageSqKm` gave me a new image, `fallowedArea`, where each pixel's value was its area in square kilometers if it had been fallowed and zero otherwise.
+
+```javascript
+// Calculate fallowed area by pixel (0 if pixel was not fallowed)
+var areaImageSqM = ee.Image.pixelArea()
+	.clip(centralValley);
+var areaImageSqKm = areaImageSqM.multiply(0.000001);
+var fallowedArea = fallowedBinary.multiply(areaImageSqKm);
+```
+
+Now I could sum all the pixels in `fallowedArea` using a Reducer to get the total fallowed area. To make this work, I performed the computation at a 200-meter spatial resolution; smaller resolutions (like 30 meters, Landsat's spatial resolution) were too fine for the computation to handle and made it time out.
+
+```javascript
+// Calculate total fallowed area in square kilometers. 
+var totalFallowedArea = fallowedArea.reduceRegion({reducer: ee.Reducer.sum(),
+	geometry: centralValley,
+	scale: 200});
+print('Total fallowed area, sq km:', totalFallowedArea);
+```
+
+The end result from the classification approach: 2622 square kilometers of fallowed land. The Central Valley is 58,816 square kilometers total (at least, the region that I defined as the Central Valley is that size), and according to my classifier, 2010 vegetated area was 16,766 square kilometers. This makes my estimate of summer 2015 fallowed land to be 15.64% of what was vegetated in summer 2010 and 4.46% of all the Central Valley.
+
 
 <a name="ndvi"></a>
 ## Approach 2: NDVI Difference
@@ -189,24 +338,26 @@ var polygons2015 = ee.FeatureCollection('ft:1scXL_EoS1dsU2x87pgU2LWgFG9wpwI5WSib
 
 ###### Band Math
 
-###### Setting a Threshold
+###### Setting a Threshold to Find Fallowed Land
 
 <a name="results"></a>
 ## Results
 
-###### Calculating Area
+
 
 ###### Classification vs. NDVI Difference
 
 <a name="bib"></a>
 ### Sources
 
-California Gap Analysis, 1998. "Land-cover for California." Biogeography Lab, University of California, Santa Barbara.
+California Gap Analysis. "Land-cover for California." 1998. Biogeography Lab, University of California, Santa Barbara.
 
-Google Earth Engine Team, 2015. "Google Earth Engine: A planetary-scale geospatial analysis platform." https://earthengine.google.com
+Google Earth Engine Team. "Google Earth Engine: A planetary-scale geospatial analysis platform." 2015. https://earthengine.google.com
 
-Griffin D and Anchukaitis KJ, 2014. “How unusual is the 2012–2014 California drought?” *Geophys. Res. Lett.*, 41, 9017–9023, doi:10.1002/2014GL062433
+Griffin, D and KJ Anchukaitis. “How unusual is the 2012–2014 California drought?” *Geophysical Research Letters* 41 (2014): 9017–9023.
 
-Lund J. "The banality of California's '1200-year' drought." *California WaterBlog*. September 23, 2015.
+Liaw, A and M Wiener. "Classification and Regression by randomForest." *R News* 2.3 (2002): 18-22.
 
-U.S. Geological Survey, 2015. "SLC-off Products: Background." http://landsat.usgs.gov/products_slcoffbackground.php
+Lund, J. "The banality of California's '1200-year' drought." *California WaterBlog*. September 23, 2015.
+
+U.S. Geological Survey. "SLC-off Products: Background." 2015. http://landsat.usgs.gov/products_slcoffbackground.php
