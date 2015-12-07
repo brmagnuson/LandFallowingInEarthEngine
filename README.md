@@ -62,6 +62,7 @@ var centralValley = ee.FeatureCollection('ft:1h46ENpEp8vO3pOe1EqeF1sZLEDhSVMxbu8
 (Specific instructions on the import process [here](https://developers.google.com/earth-engine/importing).)
 
 
+<a name="landsat"></a>
 ###### Landsat Imagery
 
 Next I needed satellite imagery of the area. Google Earth Engine has both raw and processed data from all the Landsat satellites available as ImageCollections. Ideally, I would have used Landsat 7 Surface Reflectance data, because it is available from January 1, 1999, to the present day, meaning it includes all the dates of interest to me in one, apples-to-apples data set. However, Landsat 7 commonly has white striping across sections of its imagery because of the failure of the [Scan Line Corrector](http://landsat.usgs.gov/products_slcoffbackground.php) in 2003. For example, the below image shows a composite July 2010 Landsat 7 photo of the Merced, California, area.
@@ -97,6 +98,7 @@ var median2010 = summer2010.median();
 var median2015 = summer2015.median();
 ```
 
+<a name="clipping"></a>
 ###### Clipping Imagery
 
 Now that I have my two pieces of data--the Central Valley and Landsat imagery--I can clip the median-pixel Landsat images by the Central Valley and work with just my area of interest:
@@ -121,7 +123,7 @@ Map.addLayer(clipped2015, vizParams2015);
 Map.setCenter(-120.959, 37.571, 7);
 ```
 
-I've put the results of these two pieces of code together for easy comparison. Voilà, California's Central Valley! 2015 is not looking quite as lush.
+I've put the results of these two pieces of code together for easy comparison. Voilà, California's Central Valley! 2015 is not looking quite as lush; the southern half of the Central Valley in particular seems to have fewer green patches and more brown.
 
 ![2010 vs 2015](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/ClippedComparison.png "2010 vs 2015")
 
@@ -263,7 +265,7 @@ And here's 2015:
 **Vegetation**            | 0        | 0        | 69        | 4549       | *98.5%* 
 _**Producer's Accuracy**_ | *97.6%*  | *100.0%* | *96.3%*   | *99.4%*    | _**97.0%**_
 
-Clearly 2015 is classifying built-up, urban areas as bare soil far too often, and this could make the classification's estimation of fallowed land too high, since land classified as vegetated in 2010 and bare soil in 2015 will be treated as fallowed. However, since the 2010 classifier has a very high accuracy rate for vegetation, I suspect that most of the 2015 pixels misclassified as urban won't get picked up when I test for the vegetation-to-bare-soil conversion. Given this, I decided it was not worth the effort to draw better training regions of interest and moved on to Step 3.
+My 2015 classifier is classifying built-up, urban areas as bare soil far too often. This could make the classification's estimation of fallowed land too high, since land classified as vegetated in 2010 and bare soil in 2015 will be treated as fallowed. However, since the 2010 classifier has a very high accuracy rate for vegetation, I suspect that most of the 2015 pixels misclassified as urban won't get picked up when I test for the vegetation-to-bare-soil conversion. Given this, I decided it was not worth the effort to draw better training regions of interest and moved on to Step 3.
 
 Step 3: Train the classifier on the full data set.
 
@@ -334,11 +336,75 @@ The end result from the classification approach: 2622 square kilometers of fallo
 <a name="ndvi"></a>
 ## Approach 2: NDVI Difference
 
+Another approach to estimating the total area of fallowed land is to see how the Normalized Difference Vegetation Index (NDVI) had changed between 2010 and 2015, considering land whose NDVI had decreased substantially to have converted from vegetation to bare soil, meaning it had been fallowed. This section explains how to do this in Google Earth Engine.
+
+
 ###### NDVI
 
-###### Band Math
+NDVI is an index of plant "greenness" originally conceptualized by Deering (1978). Its ratio relates the red and near-infrared spectral bands in a way that helps detect live green plants in remote sensing data. Its formula is:
+
+NDVI = (NIR - Red) / (NIR + Red)
+
+Healthy vegetation absorbs most visible light that reaches it and reflects a great deal of near-infrared light. It has evolved to do this because absorbing more more infared light would overheat the plants. Dying or sparse vegetation, as well as bare soil, reflects more visible light and less near-infrared light than healthy vegetation. So a normalized measure of the difference between the amount of red reflectance and the amount of near-infrared reflectance provides an indication of whether or not healthy plants are in a pixel. The value of NDVI always ranges from -1 to +1, with the higher values indicating more or healthier vegetation. For more details, NASA's Earth Observatory provides a nice explanation [here](http://earthobservatory.nasa.gov/Features/MeasuringVegetation/measuring_vegetation_2.php).
+
+In a new script, I used the same processes outlined above to get a [median-pixel composite image](#landsat) of Landsat 5 data for the summer of 2010 and Landsat 8 data for the summer of 2015 and [clipped](#clipping) them to just the region of the Central Valley. Then I created a function that would calculate NDVI for every pixel in an image using Earth Engine's Image.normalizedDifference() method.
+
+```javascript
+// This function gets NDVI from any imagery with red and NIR bands.
+var getNDVI = function(image, redBand, nirBand) {
+  return image.normalizedDifference([nirBand, redBand]);
+};
+```
+
+I used this function to calculate NDVI for my satellite images and displayed them. Darker areas have lower NDVIs, and lighter areas have higher NDVIs (and thus more vegetation).
+
+```javascript
+// Find NDVI
+var ndvi2010 = getNDVI(clipped2010, 'B3', 'B4');
+var ndvi2015 = getNDVI(clipped2015, 'B4', 'B5');
+Map.addLayer(ndvi2010);
+Map.addLayer(ndvi2015);
+```
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/NDVIComparison.png "NDVI Comparison")
+
+It so happens that water always has a negative NDVI because it absorbs *more* near-infrared light than red. Since I knew I wouldn't be interested in areas that had been water in 2010, I masked those out of my NDVI Images.
+
+```javascript
+// Create a land layer so that we can mask out known water areas.
+var land = ndvi2010.gt(0);
+```
+```javascript
+// Mask ndvi to just the land areas.
+ndvi2010 = ndvi2010.mask(land);
+ndvi2015 = ndvi2015.mask(land);
+```
+
+This prevented water areas from showing up in my calculations by accident.
+
+
+###### Calculating NDVI Difference
+
+I wanted to see where NDVI had decreased substantially to try to estimate fallowed land area, so subtracting 2010 NDVI from 2015 NDVI for each pixel would give me a picture of where there had been decreases in NDVI.
+
+```javascript
+// Find the difference in NDVI. Result is positive if NDVI increased, negative if it decreased.
+var ndviDifference = ndvi2015.subtract(ndvi2010);
+```
+
+I displayed my image as red where there had been a decrease in NDVI and green where there had been an increase.
+
+```javascript
+// Map NDVI difference
+var ndviParams = {palette: 'FF0000, 000000, 00FF00', min: -1, max: 1};
+Map.addLayer(ndviDifference, ndviParams);
+```
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/NDVIDifference.png "NDVI Difference")
+
 
 ###### Setting a Threshold to Find Fallowed Land
+
 
 <a name="results"></a>
 ## Results
@@ -352,6 +418,8 @@ The end result from the classification approach: 2622 square kilometers of fallo
 
 California Gap Analysis. "Land-cover for California." 1998. Biogeography Lab, University of California, Santa Barbara.
 
+Deering, DW. *Rangeland reflectance characteristics measured by aircraft and spacecraft sensors*. PhD Dissertation. Texas A&M University, 1978.
+
 Google Earth Engine Team. "Google Earth Engine: A planetary-scale geospatial analysis platform." 2015. https://earthengine.google.com
 
 Griffin, D and KJ Anchukaitis. “How unusual is the 2012–2014 California drought?” *Geophysical Research Letters* 41 (2014): 9017–9023.
@@ -361,3 +429,5 @@ Liaw, A and M Wiener. "Classification and Regression by randomForest." *R News* 
 Lund, J. "The banality of California's '1200-year' drought." *California WaterBlog*. September 23, 2015.
 
 U.S. Geological Survey. "SLC-off Products: Background." 2015. http://landsat.usgs.gov/products_slcoffbackground.php
+
+Weier, J and D Herring. "Measuring Vegetation (NDVI & EVI)." Earth Observatory, NASA. August 30, 2000. http://earthobservatory.nasa.gov/Features/MeasuringVegetation/measuring_vegetation_2.php

@@ -127,6 +127,25 @@ var totalFallowedArea = fallowedArea.reduceRegion({reducer: ee.Reducer.sum(),
 	scale: 200});
 print('Total fallowed area, sq km:', totalFallowedArea);
 
+var totalCVArea = areaImageSqKm.reduceRegion({reducer: ee.Reducer.sum(),
+	geometry: centralValley,
+	scale: 200});
+print('Total area of the Central Valley, sq km:', totalCVArea);
+
+var vegetatedBinary2010 = classified2010.eq(3);
+var vegetatedArea2010 = vegetatedBinary2010.multiply(areaImageSqKm);
+var totalVegetatedArea2010 = vegetatedArea2010.reduceRegion({reducer: ee.Reducer.sum(),
+	geometry: centralValley,
+	scale: 200});
+print('Total 2010 vegetated area, sq km:', totalVegetatedArea2010);
+
+var vegetatedBinary2015 = classified2015.eq(3);
+var vegetatedArea2015 = vegetatedBinary2015.multiply(areaImageSqKm);
+var totalVegetatedArea2015 = vegetatedArea2015.reduceRegion({reducer: ee.Reducer.sum(),
+	geometry: centralValley,
+	scale: 200});
+print('Total 2015 vegetated area, sq km:', totalVegetatedArea2015);
+
 // Display.
 // Map.addLayer(clipped2015, vizParams2015);
 // Map.addLayer(classified2010, {min: 0, max: 3, palette: palette});
