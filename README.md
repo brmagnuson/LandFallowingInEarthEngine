@@ -405,6 +405,49 @@ Map.addLayer(ndviDifference, ndviParams);
 
 ###### Setting a Threshold to Find Fallowed Land
 
+I had decided to consider pixels in which NDVI had decreased substantially from 2010 to 2015 as fallowed land for my exploration, but what should I count as a substantial decrease? I plotted a histogram of all non-negative (non-water) NDVI values for 2010 to see if there were any patterns in the data.
+
+```javascript
+// Histogram of 2010 NDVI.
+var options = {
+  title: 'Central Valley NDVI Histogram',
+  fontSize: 20,
+  hAxis: {title: 'NDVI'},
+  vAxis: {title: 'count'},
+  series: {
+    0: {color: 'blue'}}
+};
+var histogram = Chart.image.histogram(ndvi2010, centralValley, 100)
+    .setSeriesNames(['NDVI'])
+    .setOptions(options);
+print(histogram);
+```
+
+![alt text](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/NDVIHistogram.png "NDVI Histogram")
+
+I had been hoping for a clear bimodal distribution: one hump for bare soil and one hump for healthy vegetation, with urban areas fairly evenly distributed across the possible spectrum. Unfortunately, this did not materialize. There is a clear hump where bare soil values centered around 0.2 , but vegetation seems to be fairly evenly distributed across the higher possible NDVI values, although there is a very slight hump at 0.6.
+
+Without a clear sign of what NDVI values for vegetated fields tended to be, I decided to try a few different possible thresholds for what constituted a substantial decline to get a general picture: -0.2, -0.3, and -0.4. I tried each value in the first line of the following snippet of code.
+
+```javascript
+// Calculate fallowed area by pixel (0 if pixel was not fallowed)
+var fallowed = ndviDifference.lt(-0.2);
+var areaImageSqM = ee.Image.pixelArea()
+            .clip(centralValley);
+var areaImageSqKm = areaImageSqM.multiply(0.000001);
+var fallowedArea = fallowed.multiply(areaImageSqKm);
+var totalFallowedArea = fallowedArea.reduceRegion(ee.Reducer.sum(), centralValley, 90);
+print(totalFallowedArea);
+```
+
+This gave me a spectrum of results, with the amount of total fallowed land decreasing as the threshold for consideration as fallowed land grew larger in magnitude.
+
+Threshold | Resulting Estimated Fallowed Area (sq km)
+:---:       | :---:
+-0.2      | 5200
+-0.3      | 3418 
+-0.4      | 2223
+
 
 <a name="results"></a>
 ## Results
