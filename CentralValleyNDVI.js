@@ -7,7 +7,7 @@
 ///////////////
 
 // Parameters
-var ndviParams = {palette: 'FF0000, 000000, 00FF00', min: -1, max: 1};
+var ndviParams = {palette: 'FF0000, 000000, 00FF00', min: -0.5, max: 0.5};
 var vizParams2010 = {bands: ['B3', 'B2', 'B1'], min: 0, max: 0.3};
 var vizParams2015 = {bands: ['B4', 'B3', 'B2'], min: 0, max: 0.3};
 var bands2010 = ['B1', 'B2', 'B3', 'B4'];

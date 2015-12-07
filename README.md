@@ -396,7 +396,7 @@ I displayed my image as red where there had been a decrease in NDVI and green wh
 
 ```javascript
 // Map NDVI difference
-var ndviParams = {palette: 'FF0000, 000000, 00FF00', min: -1, max: 1};
+var ndviParams = {palette: 'FF0000, 000000, 00FF00', min: -0.5, max: 0.5};
 Map.addLayer(ndviDifference, ndviParams);
 ```
 
@@ -452,9 +452,20 @@ Threshold | Resulting Estimated Fallowed Area (sq km)
 <a name="results"></a>
 ## Results
 
-
-
 ###### Classification vs. NDVI Difference
+
+To review, the classification approach estimated 2622 square kilometers of fallowed land, while the NDVI difference approach estimated 2223 to 5200 square kilometers, depending on how strictly I set the threshold. While these estimates do not precisely match, they seem to be reasonably in the same neighborhood. I think the -0.3 or -0.4 NDVI difference thresholds are more likely to be closer to the truth: a decline of 0.2 could simply be due to stressed vegetation or a different type of vegetation, and the probability of this being the case decreases as the threshold becomes stricter. The average of the estimates resulting from the two stricter thresholds is 2820.5 square kilometers, which is quite close to the classification approach's estimate. So as a very provisional figure, it is likely safe to say that the amount of fallowed land in California's Central Valley was around 2000 to 3500 square kilometers in the summer of 2015.
+
+
+
+
+###### Additional Considerations
+
+Keep in mind, some land was likely regularly fallowed rather than fallowed due to drought, since farmers often let their fields rest to allow the soil time to recuperate. So these numbers likely are higher than the acreage specifically fallowed due to drought.
+
+One way to set a firmer threshold for the NDVI approach would be to use the method proposed by [Thenkabail, Gamage, and Smakhtin](http://www.iwmi.cgiar.org/Publications/IWMI_Research_Reports/PDF/pub085/RR85.pdf) (2004). Rather than a simple difference of two years, they propose finding the average NDVI value of a pixel over a longer time span of years (18 years in their example) and using the year of interest's deviation from this mean as an indication of below-normal vegetation condition/health. Extending this method by using a threshold set by that pixel's standard deviation would make for a more rigorous estimate of fallowing using the NDVI approach. (It still involves choosing a threshold somewhat arbitrarily, but it would at least be a more informed choice.)
+
+As a final note, much of California's Central Valley actually experiences two growing seasons, so redoing this analysis for the winter months could also be interesting.
 
 <a name="bib"></a>
 ### Sources
@@ -470,6 +481,8 @@ Griffin, D and KJ Anchukaitis. “How unusual is the 2012–2014 California drou
 Liaw, A and M Wiener. "Classification and Regression by randomForest." *R News* 2.3 (2002): 18-22.
 
 Lund, J. "The banality of California's '1200-year' drought." *California WaterBlog*. September 23, 2015.
+
+Thenkabail, PS, MSDN Gamage, and VU Smakhtin. *The use of remote sensing data for drought assessment and monitoring in Southwest Asia*. Vol. 85. International Water Management Institute, 2004.
 
 U.S. Geological Survey. "SLC-off Products: Background." 2015. http://landsat.usgs.gov/products_slcoffbackground.php
 
