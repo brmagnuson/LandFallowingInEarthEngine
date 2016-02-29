@@ -1,4 +1,3 @@
-<a name="top"></a>
 # Calculating Fallowed Land in Google Earth Engine
 
 The scripts in this repo show how I used Google Earth Engine to estimate the total area of land fallowed in California's Central Valley in 2015 relative to 2010 as an attempt to see what impact the ongoing drought has had on agriculture. The following shows how I approached the project and could be used as a detailed tutorial for someone interested in using Google Earth Engine for a similar project.
