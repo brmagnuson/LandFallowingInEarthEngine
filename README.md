@@ -123,7 +123,7 @@ Map.addLayer(clipped2015, vizParams2015);
 Map.setCenter(-120.959, 37.571, 7);
 ```
 
-I've put the results of these two pieces of code together for easy comparison. Voilà, California's Central Valley! There is still agriculture in 2015, of course, but the green patches are shrinking and a little intense. The southern half of the Central Valley in particular seems to have fewer green patches and more brown.
+I've put the results of these two pieces of code together for easy comparison. Voilà, California's Central Valley! There is still agriculture in 2015, of course, but the green patches are shrinking and a little less intense. The southern half of the Central Valley in particular seems to have fewer green patches and more brown.
 
 ![2010 vs 2015](https://github.com/brmagnuson/LandFallowingInEarthEngine/blob/master/Images/ClippedComparison.png "2010 vs 2015")
 
