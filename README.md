@@ -259,7 +259,7 @@ And here's 2015:
 
  2015                     | Urban    | Water    | Bare Soil | Vegetation | *Consumer's Accuracy*
 ---                       | ---:     | ---:     | ---:      | ---:       | ---:
-**Urban**                 | 1372     | 0        | 1622      | 27         | *45.4*   
+**Urban**                 | 1372     | 0        | 1622      | 27         | *45.4%*   
 **Water**                 | 0        | 6541     | 0         | 0          | *100.0%*
 **Bare Soil**             | 34       | 0        | 43766     | 0          | *99.9%* 
 **Vegetation**            | 0        | 0        | 69        | 4549       | *98.5%* 
